@@ -14,11 +14,13 @@
 
 * Checked again for outliers and high leverage points - none found
 
+* Monte carlo validation on large vs small model
+
+* bootstrapping for estimates on SE
+
 
 
 
 # To do
 
 * clean up data cleaning portion and state reasons (mostly selective inference concerns)
-
-* check again for outliers, high leverage points, etc.
