@@ -476,11 +476,11 @@ cor(model0$fitted.values[-i1], model0_without_i1$fitted.values)
 
 ## Variable Selection and Multicollinearity
 
-In order to reduce multicollinearity, we want to carefully select covariates to reduce the size of our model. To this end, we consider forward stepwise selection, and evaluate using the Bayesian Information Criterion (BIC). We use the `step` method. 
+In order to reduce multicollinearity, we want to carefully select covariates to reduce the size of our model. To this end, we consider forward stepwise selection, and evaluate using the Bayesian Information Criterion (BIC). We use the `step` method. The `step` command runs forward stepwise variable selection - to be clear, it adds in categorical covariates not level-by-level, but by the whole covariate itself.  
 
 
 ```r
-step(lm(mass ~ 1, data=train), direction='forward', scope=formula(model0), trace=0, k=log(dim(train)[1]))
+step(lm(mass ~ 1, data=train), direction='forward', scope=formula(model0), k=log(dim(train)[1]), trace=0)
 ```
 
 ```
@@ -516,6 +516,8 @@ Rsq_changes
 ```
 
 The model with the smallest change in the R-squared has the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared value (both non-adjusted and adjusted) has decreased only slightly, which indicates that our model reduction was successful. We quickly check again for high leverage points and outliers, and declare that none are influential. 
+
+An expected benefit to this smaller model is variance reduction. Even further, because the covariates are highly multicollinear, we expect not to trade off much bias either. 
 
 
 ```r

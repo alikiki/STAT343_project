@@ -749,8 +749,11 @@ legend(&quot;topleft&quot;, c(&quot;Identity line&quot;), col=2, lty=1)</code></
 <p>In order to reduce multicollinearity, we want to carefully select
 covariates to reduce the size of our model. To this end, we consider
 forward stepwise selection, and evaluate using the Bayesian Information
-Criterion (BIC). We use the <code>step</code> method.</p>
-<pre class="r"><code>step(lm(mass ~ 1, data=train), direction=&#39;forward&#39;, scope=formula(model0), trace=0, k=log(dim(train)[1]))</code></pre>
+Criterion (BIC). We use the <code>step</code> method. The
+<code>step</code> command runs forward stepwise variable selection - to
+be clear, it adds in categorical covariates not level-by-level, but by
+the whole covariate itself.</p>
+<pre class="r"><code>step(lm(mass ~ 1, data=train), direction=&#39;forward&#39;, scope=formula(model0), k=log(dim(train)[1]), trace=0)</code></pre>
 <pre><code>## 
 ## Call:
 ## lm(formula = mass ~ element_Rb + site + element_Zr + type + element_Sr + 
@@ -784,6 +787,9 @@ stays the same. The R-squared value (both non-adjusted and adjusted) has
 decreased only slightly, which indicates that our model reduction was
 successful. We quickly check again for high leverage points and
 outliers, and declare that none are influential.</p>
+<p>An expected benefit to this smaller model is variance reduction. Even
+further, because the covariates are highly multicollinear, we expect not
+to trade off much bias either.</p>
 <pre class="r"><code>model1 = lm(mass ~ type + site + element_Rb, data=train)
 summary(model1)</code></pre>
 <pre><code>## 
