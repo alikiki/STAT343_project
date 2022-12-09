@@ -7,7 +7,7 @@ output:
     keep_md: yes
   pdf_document: default
 fontsize: 10pt
-abstract: "In this study, we analyze a dataset on obsidian rocks, and build a linear model for predicting the mass of a rock made of obsidian. The peculiarities of this dataset include, but is not restricted to, high collinearity among continuous coefficients and a skewed response variable. To this end, we employ various variable selection methods and transformations. Furthermore, we execute standard diagnostics tests and bootstrapping to quantify the validity and robustness of our model."
+abstract: "In this study, we analyze a dataset on obsidian rocks, and build a linear model for predicting the mass of a rock made of obsidian. The peculiarities of this dataset include, but are not limited to, high collinearity among continuous coefficients and a skewed response variable. To this end, we employ various variable selection methods and transformations. Furthermore, we execute standard diagnostics tests and bootstrapping to quantify the validity and robustness of our model."
 ---
 
 
@@ -376,7 +376,7 @@ summary(model0)
 
 
 ```r
-plot_diagnostics(model0, train, c(6,2))
+plot_diagnostics(model0, train, c(3,2))
 ```
 
 ![](STAT343_final_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
@@ -581,7 +581,7 @@ mc_validation = function(trials, ratio, formula, data) {
     
     model = lm(formula = formula, data=training)
     predictions = predict(model, validation)
-    error[i] = sum((validation[, "mass"] - predictions)^2) / dim(validation)[i]
+    error[i] = sum((validation[, "mass"] - predictions)^2) / dim(validation)[1]
   } 
   
   return(sum(error) / trials)
@@ -591,7 +591,7 @@ paste("Validation Error (big model):", mc_validation(500, 0.8, formula(model0), 
 ```
 
 ```
-## [1] "Validation Error (big model): NA"
+## [1] "Validation Error (big model): 0.389768821190994"
 ```
 
 ```r
@@ -599,7 +599,7 @@ paste("Validation Error (small model):", mc_validation(500, 0.8, formula(model1)
 ```
 
 ```
-## [1] "Validation Error (small model): NA"
+## [1] "Validation Error (small model): 0.421250561237836"
 ```
 
 The larger model appears to perform better, but not by a massive margin. A small caveat here is that we are running validation on the training set, and we selected our models based on the training set. This indicates a selective inference problem, but for the purpose of model selection, the problem is alleviated by the use of Monte Carlo validation. 
@@ -649,10 +649,11 @@ hist_bootstrap(100, train, model1, c(4,2))
 
 
 ```r
-predictions = predict(model1, test)
+model = lm(formula = mass ~ type + site + element_Rb, data=train)
+predictions = predict(model, test)
 error = sum(predictions - test$mass)^2 / dim(test)[1]
 
-cis = predict(model1, test, interval = "predict", level = 0.95)
+cis = predict(model, test, interval = "predict", level = 0.95)
 upper = cis[, 2]
 lower = cis[, 3]
 plot(predictions, test$mass, ylab="True Value", xlab="Prediction", main="Model Prediction Accuracy")
