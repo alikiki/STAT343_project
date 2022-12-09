@@ -6,7 +6,7 @@ output:
   html_document: 
     keep_md: yes
   pdf_document: default
-fontsize: 11pt
+fontsize: 10pt
 abstract: ""
 ---
 
@@ -631,7 +631,61 @@ cor(model0$fitted.values[-i1], model0_without_i1$fitted.values)
 
 ## Variable Selection and Multicollinearity
 
-In light of our main priority being reducing multicollinearity, we consider forward stepwise selection. Because
+In order to reduce multicollinearity, we want to carefully select covariates to reduce the size of our model. To this end, we consider forward stepwise selection, and evaluate using the Bayesian Information Criterion (BIC) and a separate validation set. We use the `step` method. 
+
+
+```r
+step(lm(mass ~ 1, data=train), direction='forward', scope=formula(model0), trace=0)
+```
+
+```
+## 
+## Call:
+## lm(formula = mass ~ element_Rb + type + site + element_Zr + element_Sr + 
+##     element_Y, data = train)
+## 
+## Coefficients:
+##      (Intercept)        element_Rb          typeCore         typeFlake  
+##          0.76810          -0.05444           0.97771           0.01925  
+## siteChagha Sefid        element_Zr        element_Sr         element_Y  
+##          0.36252           0.03714          -0.07621           0.08241
+```
+
+However, the forward stepwise method selected our original model! With this, we remove covariates by hand and observe the model diagnostics of the simpler model(s). To see which covariates we should remove, we record the differences in the R-squared values of the larger and smaller models. For the model with the overall smallest change, we plot the diagnostic plots. 
+
+
+```r
+Rsq_changes = rep(summary(model0)$r.squared, length(cts_covs))
+
+for (i in 1:length(cts_covs)) {
+  formula_string = paste("mass ~ type + site + ", colnames(train)[cts_covs[i]])
+  model = lm(formula = formula_string, data=train)
+  Rsq_changes[i] = Rsq_changes[i] - summary(model)$r.squared
+}
+
+Rsq_changes
+```
+
+```
+## [1] 0.04514843 0.08552306 0.21870971 0.23022396
+```
+
+The model with the smallest change in the R-squared considers the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared values (both non-adjusted and adjusted) and the residual sum of squares have decreased and increased respectively only slightly, which indicates that our model reduction was successful. Nonetheless, the heteroskedasticity persists.
+
+
+```r
+model1 = lm(mass ~ type + site + element_Rb, data=train)
+
+plot_diagnostics(model1, train)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
+
+```r
+plot_model(model1)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-31-2.png)<!-- -->
 
 ## Heteroskedasticity 
 
@@ -682,5 +736,5 @@ plot(lambdas, mc_validation(trials, training_test_ratio, lambdas, train),
      ylab = "Validation Error")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-29-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
 
