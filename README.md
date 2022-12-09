@@ -11,3 +11,14 @@
 * Completed outlier analysis - no statistically significant outliers
 
 * Completed variable selection - tested all models of the form type + site + [continuous covariate]. The model type + site + element_Rb was found to reduce the R-squared the least. 
+
+* Checked again for outliers and high leverage points - none found
+
+
+
+
+# To do
+
+* clean up data cleaning portion and state reasons (mostly selective inference concerns)
+
+* check again for outliers, high leverage points, etc.

@@ -635,20 +635,24 @@ In order to reduce multicollinearity, we want to carefully select covariates to 
 
 
 ```r
-step(lm(mass ~ 1, data=train), direction='forward', scope=formula(model0), trace=0)
+step(lm(mass ~ 1, data=train), direction='both', scope=formula(model0), trace=0, k=log(dim(train)[1]))
 ```
 
 ```
 ## 
 ## Call:
-## lm(formula = mass ~ element_Rb + type + site + element_Zr + element_Sr + 
+## lm(formula = mass ~ element_Rb + site + element_Zr + type + element_Sr + 
 ##     element_Y, data = train)
 ## 
 ## Coefficients:
-##      (Intercept)        element_Rb          typeCore         typeFlake  
-##          0.76810          -0.05444           0.97771           0.01925  
-## siteChagha Sefid        element_Zr        element_Sr         element_Y  
-##          0.36252           0.03714          -0.07621           0.08241
+##      (Intercept)        element_Rb  siteChagha Sefid        element_Zr  
+##          0.76810          -0.05444           0.36252           0.03714  
+##         typeCore         typeFlake        element_Sr         element_Y  
+##          0.97771           0.01925          -0.07621           0.08241
+```
+
+```r
+# step(lm(mass ~ type + site + element_Rb + element_Y + element_Sr + element_Zr, data=train), direction='backward', scope=formula(model0), trace=0)
 ```
 
 However, the forward stepwise method selected our original model! With this, we remove covariates by hand and observe the model diagnostics of the simpler model(s). To see which covariates we should remove, we record the differences in the R-squared values of the larger and smaller models. For the model with the overall smallest change, we plot the diagnostic plots. 
@@ -670,24 +674,187 @@ Rsq_changes
 ## [1] 0.04514843 0.08552306 0.21870971 0.23022396
 ```
 
-The model with the smallest change in the R-squared considers the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared values (both non-adjusted and adjusted) and the residual sum of squares have decreased and increased respectively only slightly, which indicates that our model reduction was successful. Nonetheless, the heteroskedasticity persists.
+The model with the smallest change in the R-squared considers the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared values (both non-adjusted and adjusted) and the residual sum of squares have decreased and increased respectively only slightly, which indicates that our model reduction was successful. 
 
 
 ```r
 model1 = lm(mass ~ type + site + element_Rb, data=train)
-
-plot_diagnostics(model1, train)
+summary(model1)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
+```
+## 
+## Call:
+## lm(formula = mass ~ type + site + element_Rb, data = train)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.98896 -0.39021 -0.00293  0.42436  2.45963 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)       9.359535   0.597533  15.664  < 2e-16 ***
+## typeCore          0.900239   0.169554   5.309 1.75e-07 ***
+## typeFlake         0.019677   0.064645   0.304    0.761    
+## siteChagha Sefid  0.321410   0.067781   4.742 2.86e-06 ***
+## element_Rb       -0.043578   0.002395 -18.195  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.6419 on 440 degrees of freedom
+## Multiple R-squared:  0.5563,	Adjusted R-squared:  0.5523 
+## F-statistic: 137.9 on 4 and 440 DF,  p-value: < 2.2e-16
+```
 
 ```r
+plot_diagnostics(model1, train)
 plot_model(model1)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-31-2.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-31-1.png)<!-- -->![](STAT343_final_files/figure-html/unnamed-chunk-31-2.png)<!-- -->
+
+We check again for high leverage points and outliers, as our diagnostic plots indicate a few points that deviate from the trend quite drastically (e.g. points 103, 403). However, we do not expect these points to be influential because they lie roughly equidistant from the trend line and do not possess high leverage. Using the same quantitative method to check for outliers, no outliers could be detected. We can further check if the removal of both of these points changes the fitted values significantly. The fitted values are nearly the same regardless of the point removals. Therefore, our model looks sufficiently good. Nonetheless, we still notice a slightly decreasing trend in variance in the `element_Rb` diagnostic plot - we address this in the next section.
+
+
+```r
+# leverage
+X = model.matrix(model1)
+lev = diag(X%*%solve(t(X)%*%X,t(X)))
+
+par(mfrow=c(3,1))
+plot(model1$fit, model1$residuals, cex=10*lev)
+plot(train[,"element_Sr"], model1$residuals, cex=10*lev)
+plot(train[,"element_Y"], model1$residuals, cex=10*lev)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
+
+
+```r
+# outliers
+n=dim(train)[1]
+df=summary(model1)$df[1]
+print(paste0('Max studentized residual: ',max(abs(studres(model1)))))
+```
+
+```
+## [1] "Max studentized residual: 4.78875720110191"
+```
+
+```r
+tval = qt(1-0.05/2/n,df)
+print(paste0('Bonferroni-adjusted threshold: ',tval))
+```
+
+```
+## [1] "Bonferroni-adjusted threshold: 10.9113059211514"
+```
+
+```r
+par(mfrow=c(1,2))
+plot(model1$fitted.values, model1$residuals,col="white")
+text(model1$fitted.values, model1$residuals, as.character(1:dim(train)[1]))
+plot(train[, "element_Rb"], model1$residuals, col="white")
+text(train[, "element_Rb"], model1$residuals, as.character(1:dim(train)[1]))
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-33-1.png)<!-- -->
+
+
+```r
+remove_idx = c(193, 433)
+model_temp = lm(formula = mass ~ element_Rb + type + site, data=train[-remove_idx,])
+
+summary(model_temp)
+```
+
+```
+## 
+## Call:
+## lm(formula = mass ~ element_Rb + type + site, data = train[-remove_idx, 
+##     ])
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1.95309 -0.38510 -0.00857  0.41852  1.80623 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)       9.209212   0.575305  16.008  < 2e-16 ***
+## element_Rb       -0.043041   0.002305 -18.671  < 2e-16 ***
+## typeCore          0.901286   0.162729   5.539 5.27e-08 ***
+## typeFlake         0.022573   0.062247   0.363    0.717    
+## siteChagha Sefid  0.352758   0.065334   5.399 1.10e-07 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.616 on 438 degrees of freedom
+## Multiple R-squared:  0.5776,	Adjusted R-squared:  0.5738 
+## F-statistic: 149.8 on 4 and 438 DF,  p-value: < 2.2e-16
+```
+
+
+```r
+plot(model1$fitted.values[-remove_idx], model_temp$fitted.values)
+abline(0,1, col=2)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-35-1.png)<!-- -->
+
+```r
+cor(model1$fitted.values[-remove_idx], model_temp$fitted.values)
+```
+
+```
+## [1] 0.9997981
+```
 
 ## Heteroskedasticity 
+
+In order to accommodate for differing variances, we consider weighted least squares. Unfortunately, weighted least squares does not 
+
+
+```r
+model2 = lm(mass ~ type + site + element_Rb, data=train, weights=element_Rb)
+
+plot(model2$fitted.values, model2$residuals / sqrt(train[, "element_Rb"]))
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-36-1.png)<!-- -->
+
+```r
+anova(model2)
+```
+
+```
+## Analysis of Variance Table
+## 
+## Response: mass
+##             Df Sum Sq Mean Sq F value    Pr(>F)    
+## type         2  10472    5236  53.142 < 2.2e-16 ***
+## site         1  11235   11235 114.026 < 2.2e-16 ***
+## element_Rb   1  33574   33574 340.740 < 2.2e-16 ***
+## Residuals  440  43355      99                      
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+```
+
+On the contrary, weighted least squares appears to have overcorrected for the problem. Therefore, we do not consider the weighted least squares model. 
+
+
+```r
+# attach(train)
+# model3 = gls(mass ~ type + site + element_Rb, data=train, weight = varConstPower(1, form = ~ train[,"element_Rb"]))
+# fitted_sigma = (exp(model3$mod[[1]][[1]]) + (train[, "element_Rb"])^model3$mod[[1]][[2]])
+# plot(train[,"element_Rb"], model3$resid /(fitted_sigma))
+```
+
+
+```r
+# plot_model(model3)
+```
+
+Finally, we consider interaction terms. However, we do not suspect that 
 
 
 
@@ -736,5 +903,5 @@ plot(lambdas, mc_validation(trials, training_test_ratio, lambdas, train),
      ylab = "Validation Error")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-39-1.png)<!-- -->
 
