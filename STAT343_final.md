@@ -12,61 +12,13 @@ abstract: ""
 
 
 
-### Decision list
-
-* For types, delete the entries that are ambiguous. For example, the ones that are like "Blade (Flake?)" or "Core fragment? Flake?". Reason: if labeled ambiguously, we will never know the "correct" label, and if we decide to coerce into one of the levels by looking at the data, then we are introducing selective inference problems. We only lose 9 data points (original: 652, modified: 643) - APPROVED
-
-* For site, delete the two sites that are not Ali Kosh and Chagha Sefid. Reason: the label is ambiguous for the Ali Kosh / Chagha Sefid point, and for the Tepe point, there's only one point so it's not like we could derive any useful insights regarding that site anyway. We only lose two data points (original: 643, modified: 641) - APPROVED
-
-
-
-
-
 In this project, we will analyze a dataset on Obsidian rocks, and try to build a working linear model for predicting the mass of a rock made of obsidian. 
 
-Step 0: Importing the data and looking at it, trying to get a feel for it. 
+## Cleaning and Exploration
 
 
 ```r
 data <- read.table("data/obsidian_data.txt", header = TRUE, sep = ",")
-```
-
-
-```r
-head(data, n=10)
-```
-
-```
-##              ID  mass           type     site element_Rb element_Sr element_Y
-## 1   288275.002a 0.502          Blade Ali Kosh        238         45        29
-## 2  288275.002aa 0.227          Flake Ali Kosh        234         44        28
-## 3  288275.002ab 0.188          Flake Ali Kosh        255         50        32
-## 4  288275.002ac 0.153          Flake Ali Kosh        231         46        28
-## 5  288275.002ad 0.102          Blade Ali Kosh        252         49        31
-## 6  288275.002ae 0.440          Flake Ali Kosh        234         44        28
-## 7  288275.002af 0.656          Blade Ali Kosh        226         44        28
-## 8  288275.002ag 0.484          Flake Ali Kosh        230         45        29
-## 9  288275.002ah 0.579          Blade Ali Kosh        230         44        28
-## 10 288275.002ai 0.713 Core fragment? Ali Kosh        236         45        28
-##    element_Zr
-## 1         334
-## 2         325
-## 3         337
-## 4         327
-## 5         331
-## 6         327
-## 7         323
-## 8         330
-## 9         328
-## 10        331
-```
-
-Data looks like it made it into R okay, so we can start analyzing it. 
-
-Step 1: Data Exploration, cleaning, dealing with missing data. 
-
-
-```r
 summary(data)
 ```
 
@@ -89,7 +41,16 @@ summary(data)
 ## 
 ```
 
-Already, we spot some interesting features: we see a repeated ID, making me suspect an object has been logged twice. There seems to be a missing mass value, as well a terribly wrong outlier on the high side. A few missing and a few uncertain types. An ambigious site which we should probably predict. Element Rb and Element Sr look fine, but Element Y seems to have an outlier on the high side, and Element Zr has a low side outlier. Let's look at these one by one. 
+<!-- ```{r} -->
+<!-- head(data, n=10) -->
+<!-- ``` -->
+
+<!-- Data looks like it made it into R okay, so we can start analyzing it.  -->
+
+<!-- Step 1: Data Exploration, cleaning, dealing with missing data.  -->
+
+
+After importing the data, we spot some interesting features: we see a repeated ID, which suggests that an object has been logged twice. The mass data has a missing value and an extremely large value also. A few missing and a few uncertain types. An ambigious site which we should probably predict. Element Rb and Element Sr look fine, but Element Y seems to have an outlier on the high side, and Element Zr has a low side outlier. Let's look at these one by one. 
 
 
 
@@ -140,7 +101,7 @@ Now I plot the histogram of masses to see what kind of distribution it follows.
 hist(data$mass)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
 Clearly, this does not seem normal It might be worth putting some sort of transformation onto it: probably transforming it on a log scale, or other variable. We will see about this later, but take a note of this. 
 
 
@@ -148,7 +109,7 @@ Clearly, this does not seem normal It might be worth putting some sort of transf
 hist(log(data$mass))
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 This looks pretty good so let's do it
 
 
@@ -171,32 +132,6 @@ levels(data$type)
 
 
 ```r
-# data$type[data$type == "Blades"] <- "Blade"
-# data$type[data$type == "blade"] <- "Blade"
-# data$type[data$type == "Distal end of prismatic blade?"] <- "Blade"
-# 
-# data$type[data$type == "flake"] <- "Flake"
-# data$type[data$type == "Flakes"] <- "Flake"
-# data$type[data$type == "Flake (listed as)"] <- "Flake"
-# 
-# data$type[data$type == "core"] <- "Core"
-# data$type[data$type == "Cores and frags"] <- "Core"
-# data$type[data$type == "Core/Fragment"] <- "Core"
-# data$type[data$type == "Core fragment"] <- "Core"
-# data$type[data$type == "Core fragment?"] <- "Core"
-# data$type[data$type == "Cores and fragments"] <- "Core"
-# data$type[data$type ==  "Fragment (from core?)"] <- "Core"
-# 
-# data$type[data$type == "Retouched blades"] <- "Retouched Blade" 
-# data$type[data$type == "Retouched Blades"] <- "Retouched Blade"     
-# 
-# data$type[data$type == "Retouched Blade"] <- "Blade" 
-# data$type[data$type == "Used flake"] <- "Flake" 
-
-data <- data[-which(data$type ==  "Blade (Flake?)"),]
-data <- data[-which(data$type ==  "Core fragment? Flake?"),]
-data <- data[-which(data$type ==  "Fragment (from core?)"),]
-
 blade_type = c(
   "Blade", 
   "Distal end of prismatic blade?",
@@ -268,25 +203,25 @@ Now I am just going to plot the histograms of the 4 elements and see what the di
 hist(data$element_Rb)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
 ```r
 hist(data$element_Sr)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-17-2.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-15-2.png)<!-- -->
 
 ```r
 hist(data$element_Y)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-17-3.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-15-3.png)<!-- -->
 
 ```r
 hist(data$element_Zr)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-17-4.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-15-4.png)<!-- -->
 
 Rb looks fine, but I think the others have outliers we can get rid of, which are probably just mis-entered data. 
 
@@ -303,7 +238,7 @@ data[which(data$element_Zr<100 | data$element_Y>50 | data$element_Sr<20), ]
 ## 628        303
 ## 652         65
 ```
-I will just delete these two
+I will just delete these two 
 
 
 ```r
@@ -317,17 +252,17 @@ summary(data)
 
 ```
 ##       ID                 mass             type               site          
-##  Length:636         Min.   :-3.4420   Length:636         Length:636        
-##  Class :character   1st Qu.:-1.5524   Class :character   Class :character  
+##  Length:637         Min.   :-3.4420   Length:637         Length:637        
+##  Class :character   1st Qu.:-1.5512   Class :character   Class :character  
 ##  Mode  :character   Median :-0.8604   Mode  :character   Mode  :character  
-##                     Mean   :-0.9092                                        
-##                     3rd Qu.:-0.3678                                        
+##                     Mean   :-0.9094                                        
+##                     3rd Qu.:-0.3682                                        
 ##                     Max.   : 2.2379                                        
 ##    element_Rb      element_Sr      element_Y       element_Zr   
 ##  Min.   :206.0   Min.   :39.00   Min.   :22.00   Min.   :307.0  
 ##  1st Qu.:231.0   1st Qu.:45.00   1st Qu.:28.00   1st Qu.:326.0  
-##  Median :240.5   Median :47.00   Median :29.00   Median :332.0  
-##  Mean   :241.3   Mean   :47.03   Mean   :29.41   Mean   :332.4  
+##  Median :240.0   Median :47.00   Median :29.00   Median :332.0  
+##  Mean   :241.3   Mean   :47.04   Mean   :29.41   Mean   :332.4  
 ##  3rd Qu.:250.0   3rd Qu.:49.00   3rd Qu.:30.00   3rd Qu.:338.0  
 ##  Max.   :291.0   Max.   :65.00   Max.   :34.00   Max.   :360.0
 ```
@@ -335,45 +270,6 @@ summary(data)
 The data looks clean-ish now. 
 
 Note: note that we considered imputing by regression using a logistic regression model, but seemed too stenuous. 
-
-<!-- So we move onto Step 3, inserting missing data or uncertain data. We have some NAs to fill in, as well as some uncertain types and sites which we will impute by mean. -->
-
-<!-- For the sites, we see that the uncertain objects are both blades, so compare their masses to the masses of the blades found at the two common sites.  -->
-
-<!-- ```{r} -->
-<!-- mean(data[which(data$site == "Ali Kosh" & data$type == "Blade"), ]$mass) -->
-<!-- mean(data[which(data$site == "Chagha Sefid" & data$type == "Blade"), ]$mass) -->
-<!-- ``` -->
-<!-- Both of the two uncertain sites seem closer to the mean of Ali Kosh, so I will reassign them there.  -->
-
-<!-- ```{r} -->
-<!-- data$site[data$site == "Ali Kosh/Chaga Sefid" | data$site == "Hulailan Tepe Guran"] <- "Ali Kosh" -->
-<!-- ``` -->
-
-<!-- Now, we do the same for the uncertain types.  -->
-
-
-<!-- ```{r} -->
-<!-- mean(data[which(data$type == "Blade"), ]$mass) -->
-<!-- mean(data[which(data$type == "Flake"), ]$mass) -->
-<!-- mean(data[which(data$type == "Core"), ]$mass) -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- data[which(data$type != "Blade" & data$type != "Flake" & data$type != "Core" ), ] -->
-<!-- ``` -->
-<!-- Manually assign them to the one their mean is closer to in the two choices.  -->
-
-<!-- ```{r} -->
-<!-- data$type[data$ID == "288275.002i"] <- "Flake" -->
-<!-- data$type[data$ID == "288276c"] <- "Flake" -->
-<!-- data$type[data$ID == "288276e"] <- "Flake" -->
-<!-- data$type[data$ID == "288276f"] <- "Blade" -->
-<!-- data$type[data$ID == "288284oL"] <- "Core" -->
-
-<!-- ``` -->
-
-<!-- With our missing/uncertain values imputed, let us look at the data for one last time. -->
 
 
 ```r
@@ -389,24 +285,25 @@ summary(data)
 
 ```
 ##       ID                 mass            type               site    
-##  Length:636         Min.   :-3.4420   Blade:390   Ali Kosh    :219  
-##  Class :character   1st Qu.:-1.5524   Core : 23   Chagha Sefid:417  
+##  Length:637         Min.   :-3.4420   Blade:390   Ali Kosh    :219  
+##  Class :character   1st Qu.:-1.5512   Core : 24   Chagha Sefid:418  
 ##  Mode  :character   Median :-0.8604   Flake:223                     
-##                     Mean   :-0.9092                                 
-##                     3rd Qu.:-0.3678                                 
+##                     Mean   :-0.9094                                 
+##                     3rd Qu.:-0.3682                                 
 ##                     Max.   : 2.2379                                 
 ##    element_Rb      element_Sr      element_Y       element_Zr   
 ##  Min.   :206.0   Min.   :39.00   Min.   :22.00   Min.   :307.0  
 ##  1st Qu.:231.0   1st Qu.:45.00   1st Qu.:28.00   1st Qu.:326.0  
-##  Median :240.5   Median :47.00   Median :29.00   Median :332.0  
-##  Mean   :241.3   Mean   :47.03   Mean   :29.41   Mean   :332.4  
+##  Median :240.0   Median :47.00   Median :29.00   Median :332.0  
+##  Mean   :241.3   Mean   :47.04   Mean   :29.41   Mean   :332.4  
 ##  3rd Qu.:250.0   3rd Qu.:49.00   3rd Qu.:30.00   3rd Qu.:338.0  
 ##  Max.   :291.0   Max.   :65.00   Max.   :34.00   Max.   :360.0
 ```
 
 Looks good!
 
-Next, we check the correlations among the continuous covariates. This can be further confirmed by plotting all the the continuous covariates against each other. Observe that all the continuous covariates are highly correlated with each other. This can be further confirmed by calculating the variance inflation factor of the design matrix restricted to the continuous covariates - the design matrix is clearly poorly conditioned. 
+Next, we check the correlations among the continuous covariates. This can be further confirmed by plotting all the the continuous covariates against each other. Observe that all the continuous covariates are highly correlated with each other. This can be further confirmed by calculating the condition number of the design matrix (restricted to the continuous covariates) - the design matrix is clearly poorly conditioned, with a very wide range of values. Furthermore, we can regress each covariate onto the other covariates to obtain $R^2$ values. Observe that the nearly all the R-squared values are fairly high; on the other hand, `element_Y` seems to have a lower R-squared value, indicating that it is "less" collinear. We will keep this observation in mind as we build our models. In general, one of our major concerns is battling multicollinearity. 
+
 
 
 ```r
@@ -415,30 +312,138 @@ cor(data[, cts_covs])
 
 ```
 ##            element_Rb element_Sr element_Y element_Zr
-## element_Rb  1.0000000  0.8778281 0.7363707  0.8456213
-## element_Sr  0.8778281  1.0000000 0.7286295  0.7853497
-## element_Y   0.7363707  0.7286295 1.0000000  0.6153247
-## element_Zr  0.8456213  0.7853497 0.6153247  1.0000000
+## element_Rb  1.0000000  0.8759472 0.7361899  0.8445656
+## element_Sr  0.8759472  1.0000000 0.7281446  0.7857814
+## element_Y   0.7361899  0.7281446 1.0000000  0.6153072
+## element_Zr  0.8445656  0.7857814 0.6153072  1.0000000
 ```
 
 ```r
-plot(data[, cts_covs], pch=20 , cex=1.5 , col="#69b3a2")
+plot(data[, cts_covs], pch=20 , cex=1.0 , col="#69b3a2")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-22-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
 
 ```r
-# variance inflation factor
+# condition number
 cts_matrix = data.matrix(data[,cts_covs])
 eigenvals = eigen(t(cts_matrix) %*% cts_matrix)
 sqrt(eigenvals$val[1]/eigenvals$val)
 ```
 
 ```
-## [1]   1.00000  56.70774 254.83613 381.25933
+## [1]   1.00000  56.71536 252.83502 381.34080
 ```
 
+```r
+# R-squared onto covariates
+r_squared = rep(0,length(cts_covs))
+for (i in 1:length(cts_covs)) {
+  formula_string = paste(colnames(data)[cts_covs[i]], "~", paste(colnames(data)[cts_covs][-i], collapse="+"))
+  print(formula_string)
+  model = lm(formula = formula_string, data=data)
+  print(summary(model))
+  r_squared[i] = summary(model)$r.squared
+}
+```
 
+```
+## [1] "element_Rb ~ element_Sr+element_Y+element_Zr"
+## 
+## Call:
+## lm(formula = formula_string, data = data)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -46.919  -2.444   0.124   2.911  27.522 
+## 
+## Coefficients:
+##              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) -81.88037    9.58792  -8.540  < 2e-16 ***
+## element_Sr    1.79478    0.11821  15.183  < 2e-16 ***
+## element_Y     1.44067    0.19028   7.571 1.31e-13 ***
+## element_Zr    0.59072    0.03861  15.298  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 5.404 on 633 degrees of freedom
+## Multiple R-squared:  0.8451,	Adjusted R-squared:  0.8444 
+## F-statistic:  1152 on 3 and 633 DF,  p-value: < 2.2e-16
+## 
+## [1] "element_Sr ~ element_Rb+element_Y+element_Zr"
+## 
+## Call:
+## lm(formula = formula_string, data = data)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -3.7874 -0.9714 -0.1060  0.6414 15.3679 
+## 
+## Coefficients:
+##               Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) -20.503726   2.798652  -7.326 7.24e-13 ***
+## element_Rb    0.148748   0.009797  15.183  < 2e-16 ***
+## element_Y     0.377791   0.055199   6.844 1.82e-11 ***
+## element_Zr    0.061815   0.012776   4.838 1.65e-06 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 1.556 on 633 degrees of freedom
+## Multiple R-squared:  0.7902,	Adjusted R-squared:  0.7892 
+## F-statistic: 794.7 on 3 and 633 DF,  p-value: < 2.2e-16
+## 
+## [1] "element_Y ~ element_Rb+element_Sr+element_Zr"
+## 
+## Call:
+## lm(formula = formula_string, data = data)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -8.7779 -0.6898 -0.0506  0.7052  3.7614 
+## 
+## Coefficients:
+##              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) 11.951355   1.968793   6.070 2.20e-09 ***
+## element_Rb   0.057641   0.007613   7.571 1.31e-13 ***
+## element_Sr   0.182381   0.026648   6.844 1.82e-11 ***
+## element_Zr  -0.015112   0.009019  -1.675   0.0943 .  
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 1.081 on 633 degrees of freedom
+## Multiple R-squared:  0.5737,	Adjusted R-squared:  0.5716 
+## F-statistic: 283.9 on 3 and 633 DF,  p-value: < 2.2e-16
+## 
+## [1] "element_Zr ~ element_Rb+element_Sr+element_Y"
+## 
+## Call:
+## lm(formula = formula_string, data = data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -19.9801  -2.8629   0.1723   2.9479  22.1668 
+## 
+## Coefficients:
+##              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) 203.57802    3.71889  54.742  < 2e-16 ***
+## element_Rb    0.45694    0.02987  15.298  < 2e-16 ***
+## element_Sr    0.57695    0.11924   4.838 1.65e-06 ***
+## element_Y    -0.29217    0.17438  -1.675   0.0943 .  
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 4.753 on 633 degrees of freedom
+## Multiple R-squared:  0.7236,	Adjusted R-squared:  0.7223 
+## F-statistic: 552.4 on 3 and 633 DF,  p-value: < 2.2e-16
+```
+
+```r
+r_squared
+```
+
+```
+## [1] 0.8451380 0.7901858 0.5736697 0.7236041
+```
 
 ## Model Building
 
@@ -456,9 +461,7 @@ val = not_train[-validate_idx, ]
 test = not_train[validate_idx,]
 ```
 
-We first fit a simple model with no interaction terms. We cycle the order of the covariates in order to ask whether the categorical covariates are significant when compared against the full model. From the F-tests, we conclude that both the categorical covariates are significant in the full model i.e. there are significant differences between sites and also between object types.
-
-The diagnostic plots signify that the model is reasonably good - in particular, the linearity and normality assumptions are reasonable, save for a few outliers in the QQ plot. However, the data appears to be heteroskedastic, as indicated by the sloped scale-location plot and the various diagnostic plots. 
+We first fit a simple model with no interaction terms. We cycle the order of the covariates in order to ask whether the categorical covariates are significant when compared against the full model. 
 
 
 ```r
@@ -471,13 +474,13 @@ anova(model0)
 ## 
 ## Response: mass
 ##             Df  Sum Sq Mean Sq  F value    Pr(>F)    
-## element_Sr   1 173.054 173.054 499.9867 < 2.2e-16 ***
-## element_Y    1   1.250   1.250   3.6117   0.05803 .  
-## element_Rb   1  33.554  33.554  96.9441 < 2.2e-16 ***
-## element_Zr   1   6.139   6.139  17.7381 3.080e-05 ***
-## type         2  11.587   5.794  16.7391 9.893e-08 ***
-## site         1  11.265  11.265  32.5475 2.147e-08 ***
-## Residuals  437 151.253   0.346                       
+## element_Sr   1 174.175 174.175 467.4535 < 2.2e-16 ***
+## element_Y    1   0.790   0.790   2.1203    0.1461    
+## element_Rb   1  33.930  33.930  91.0619 < 2.2e-16 ***
+## element_Zr   1  10.790  10.790  28.9579 1.209e-07 ***
+## type         2  14.396   7.198  19.3178 9.136e-09 ***
+## site         1  11.651  11.651  31.2692 3.964e-08 ***
+## Residuals  437 162.828   0.373                       
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ```
@@ -492,35 +495,57 @@ anova(model0)
 ## 
 ## Response: mass
 ##             Df  Sum Sq Mean Sq  F value    Pr(>F)    
-## element_Sr   1 173.054 173.054 499.9867 < 2.2e-16 ***
-## element_Y    1   1.250   1.250   3.6117   0.05803 .  
-## element_Rb   1  33.554  33.554  96.9441 < 2.2e-16 ***
-## element_Zr   1   6.139   6.139  17.7381 3.080e-05 ***
-## site         1  11.685  11.685  33.7610 1.202e-08 ***
-## type         2  11.167   5.584  16.1323 1.739e-07 ***
-## Residuals  437 151.253   0.346                       
+## element_Sr   1 174.175 174.175 467.4535 < 2.2e-16 ***
+## element_Y    1   0.790   0.790   2.1203    0.1461    
+## element_Rb   1  33.930  33.930  91.0619 < 2.2e-16 ***
+## element_Zr   1  10.790  10.790  28.9579 1.209e-07 ***
+## site         1  12.327  12.327  33.0845 1.661e-08 ***
+## type         2  13.719   6.860  18.4101 2.107e-08 ***
+## Residuals  437 162.828   0.373                       
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ```
 
+```r
+summary(model0)
+```
+
+```
+## 
+## Call:
+## lm(formula = mass ~ element_Sr + element_Y + element_Rb + element_Zr + 
+##     site + type, data = train)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.44396 -0.37600 -0.02023  0.37740  2.57116 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)       0.768101   1.420653   0.541  0.58901    
+## element_Sr       -0.076213   0.018222  -4.183 3.48e-05 ***
+## element_Y         0.082413   0.028772   2.864  0.00438 ** 
+## element_Rb       -0.054441   0.005665  -9.610  < 2e-16 ***
+## element_Zr        0.037144   0.006150   6.039 3.31e-09 ***
+## siteChagha Sefid  0.362524   0.064830   5.592 3.96e-08 ***
+## typeCore          0.977714   0.162351   6.022 3.65e-09 ***
+## typeFlake         0.019245   0.061563   0.313  0.75473    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.6104 on 437 degrees of freedom
+## Multiple R-squared:  0.6015,	Adjusted R-squared:  0.5951 
+## F-statistic: 94.21 on 7 and 437 DF,  p-value: < 2.2e-16
+```
+
+
+
 
 ```r
-plot_diagnostics <- function(model, data) {
-  par(mfrow=c(3,2))
-  for (i in c(cat_covs, cts_covs)) {
-    plot(data[, i], model$residuals, main=paste(colnames(data)[i], "vs. Residuals"))
-  }
-}
-
-plot_model <- function(model) {
-  par(mfrow=c(2,2))
-  plot(model)
-}
-
 plot_diagnostics(model0, train)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-25-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
 
 
 ```r
@@ -528,111 +553,134 @@ par(mfrow=c(2,2))
 plot(model0)
 ```
 
+![](STAT343_final_files/figure-html/unnamed-chunk-25-1.png)<!-- -->
+
+From the F-tests, we conclude that both the categorical covariates are significant in the full model i.e. there are significant differences between sites and also between object types. Furthermore, all the element covariates are significant, with `element_Rb` having the lowest p-value. 
+
+The diagnostic plots signify that the model is reasonably good - in particular, the linearity and normality assumptions are reasonable, save for a few outliers in the QQ plot. This suggests that interaction terms are unnecessary since no signal seems to remain. Nonetheless, we will later test for pairwise comparisons. We first some immediate problems. Firstly, the data appears to be heteroskedastic, as indicated by the sloped scale-location plot and the various diagnostic plots. The scale-location line has an upward trend, and our diagnostic plots indicate that the variance is higher at lower values of the continuous covariates (we expect less variability in the areas with few data points, and more variability in those with many data points). Additionally, the Flake type exhibits higher mass variance in comparison to the Blade type. For potentially high leverage points, there is a large value for `element_Sr` and a small value for `element_Y`. We will address each of these issues in the following order: 
+
+1. Outliers / high leverage points / influential points
+2. Variable selection / multicollinearity considerations
+3. Variance stabilization using transformation and interactions terms
+
+## Outliers / High Leverage / Influential Points
+
+We first inspect the two points that we identified to be potentially high leverage. While the small point in `element_Y` does not have high leverage, the large point in `element_Sr` has high leverage. We save the index of this point to test for influentiality. 
+
+
+```r
+# leverage
+X = model.matrix(model0)
+lev = diag(X%*%solve(t(X)%*%X,t(X)))
+
+par(mfrow=c(3,1))
+plot(model0$fit, model0$residuals, cex=10*lev)
+plot(train[,"element_Sr"], model0$residuals, cex=10*lev)
+plot(train[,"element_Y"], model0$residuals, cex=10*lev)
+```
+
 ![](STAT343_final_files/figure-html/unnamed-chunk-26-1.png)<!-- -->
 
-Due to the high collinearity among the continuous covariates, we consider eliminating some of the continuous covariates via sparsity-inducing methods such as lasso regression. We should also consider ridge regression because for its coefficient stability properties. 
+```r
+i1 = which.max(train[, "element_Sr"])
+```
+
+For outliers, we check the studentized residuals and apply the Bonferroni correction. Because the maximum studentized residual is less than the Bonferroni-corrected threshold, we conclude that there are no outlier points. This aligns with the diagnostic plots, as no egregious outliers are present. 
 
 
 ```r
-model1 = glmnet(train[, c(cat_covs, cts_covs)], y = train[, 2], lambda = seq(0, 0.1, 0.01))
-betahat = rbind(model1$a0, as.matrix(model1$beta, nrow=6, ncol=8))
+# outliers
 
-betahat
-```
-
-
-```r
-model3 = lm.ridge(formula = mass ~ element_Sr + element_Y + element_Rb + element_Zr + type + site, data=train, lambda=seq(0,10,0.5))
-coef(model3)
+n=dim(train)[1]
+df=summary(model0)$df[1]
+print(paste0('Max studentized residual: ',max(abs(studres(model0)))))
 ```
 
 ```
-##                element_Sr  element_Y  element_Rb element_Zr  typeCore
-##  0.0 2.215070 -0.06282361 0.07086094 -0.05330874 0.03111232 0.8903131
-##  0.5 2.290077 -0.06308378 0.06967895 -0.05285491 0.03069888 0.8895908
-##  1.0 2.363748 -0.06333211 0.06851719 -0.05241096 0.03029319 0.8888612
-##  1.5 2.436119 -0.06356910 0.06737511 -0.05197657 0.02989501 0.8881248
-##  2.0 2.507226 -0.06379521 0.06625219 -0.05155143 0.02950412 0.8873819
-##  2.5 2.577104 -0.06401089 0.06514789 -0.05113524 0.02912032 0.8866330
-##  3.0 2.645786 -0.06421658 0.06406174 -0.05072771 0.02874339 0.8858783
-##  3.5 2.713302 -0.06441268 0.06299325 -0.05032859 0.02837316 0.8851184
-##  4.0 2.779685 -0.06459958 0.06194197 -0.04993760 0.02800943 0.8843534
-##  4.5 2.844963 -0.06477765 0.06090746 -0.04955449 0.02765203 0.8835838
-##  5.0 2.909164 -0.06494724 0.05988929 -0.04917903 0.02730077 0.8828098
-##  5.5 2.972316 -0.06510869 0.05888705 -0.04881099 0.02695550 0.8820318
-##  6.0 3.034446 -0.06526231 0.05790035 -0.04845014 0.02661606 0.8812499
-##  6.5 3.095578 -0.06540843 0.05692880 -0.04809627 0.02628229 0.8804645
-##  7.0 3.155737 -0.06554733 0.05597205 -0.04774918 0.02595404 0.8796758
-##  7.5 3.214948 -0.06567929 0.05502972 -0.04740868 0.02563118 0.8788841
-##  8.0 3.273232 -0.06580458 0.05410148 -0.04707457 0.02531356 0.8780895
-##  8.5 3.330612 -0.06592345 0.05318700 -0.04674667 0.02500105 0.8772923
-##  9.0 3.387109 -0.06603616 0.05228595 -0.04642481 0.02469353 0.8764927
-##  9.5 3.442744 -0.06614293 0.05139803 -0.04610881 0.02439086 0.8756909
-## 10.0 3.497537 -0.06624399 0.05052293 -0.04579853 0.02409294 0.8748871
-##       typeFlake siteChagha Sefid
-##  0.0 0.03419265        0.3549631
-##  0.5 0.03435939        0.3547344
-##  1.0 0.03452144        0.3545036
-##  1.5 0.03467895        0.3542708
-##  2.0 0.03483208        0.3540360
-##  2.5 0.03498096        0.3537994
-##  3.0 0.03512574        0.3535612
-##  3.5 0.03526656        0.3533213
-##  4.0 0.03540352        0.3530798
-##  4.5 0.03553676        0.3528369
-##  5.0 0.03566640        0.3525927
-##  5.5 0.03579253        0.3523472
-##  6.0 0.03591528        0.3521004
-##  6.5 0.03603474        0.3518525
-##  7.0 0.03615101        0.3516036
-##  7.5 0.03626419        0.3513536
-##  8.0 0.03637437        0.3511026
-##  8.5 0.03648163        0.3508508
-##  9.0 0.03658607        0.3505981
-##  9.5 0.03668775        0.3503446
-## 10.0 0.03678677        0.3500904
-```
-
-
-```r
-model2 = lm(mass ~ element_Rb + type + site, data=train)
-summary(model2)
-```
-
-```
-## 
-## Call:
-## lm(formula = mass ~ element_Rb + type + site, data = train)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -1.8089 -0.4037 -0.0063  0.4028  2.4364 
-## 
-## Coefficients:
-##                   Estimate Std. Error t value Pr(>|t|)    
-## (Intercept)       9.413791   0.571176  16.481  < 2e-16 ***
-## element_Rb       -0.043814   0.002291 -19.121  < 2e-16 ***
-## typeCore          0.791795   0.161910   4.890 1.41e-06 ***
-## typeFlake         0.041783   0.061387   0.681    0.496    
-## siteChagha Sefid  0.326521   0.064233   5.083 5.49e-07 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 0.6099 on 440 degrees of freedom
-## Multiple R-squared:  0.5783,	Adjusted R-squared:  0.5744 
-## F-statistic: 150.8 on 4 and 440 DF,  p-value: < 2.2e-16
+## [1] "Max studentized residual: 4.3487463944235"
 ```
 
 ```r
-plot_diagnostics(model2, train)
+tval = qt(1-0.05/2/n,df)
+print(paste0('Bonferroni-adjusted threshold: ',tval))
+```
+
+```
+## [1] "Bonferroni-adjusted threshold: 7.00248500367919"
+```
+
+Therefore, we have a single candidate for an influential point. We fit our original model with and without this point and observe how the fitted values change. Notice that the fitted values are almost identical, which indicates that the high leverage point is not influential enough to substantially change the model parameters. 
+
+
+```r
+model0_without_i1 = lm(formula = mass ~ element_Sr + element_Y + element_Rb + element_Zr + type + site, data=train[-i1,])
+
+plot(model0$fitted.values[-i1], model0_without_i1$fitted.values)
+abline(0,1, col=2)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-28-1.png)<!-- -->
+
+```r
+cor(model0$fitted.values[-i1], model0_without_i1$fitted.values)
+```
+
+```
+## [1] 0.9998768
+```
+
+## Variable Selection and Multicollinearity
+
+In light of our main priority being reducing multicollinearity, we consider forward stepwise selection. Because
+
+## Heteroskedasticity 
+
+
+
+\newpage
+
+## Appendix
+
+### Lasso regression
+
+In order to reduce the effects of multicollinearity, we also tried lasso regression with various regularization parameters. We choose the best regularization parameter by doing Monte Carlo cross-validation. Monte Carlo cross-validation is a generalization of leave-one-out validation: if the dataset has size $n$, we first sample without replacement to obtain a training set of size $n_1$, then funnel the remaining $n-n_1$ points into the test set. However, lasso regression performs unsatisfactorily; there is no benefit to adding a penalty term because the validation error is monotonically increasing with increasing penalty. 
+
+The more significant problem is that `glmnet` treats different dummy variables as different covariates altogether; for example, $\mathbb{one} \{ \text{type = Blade} \}$ is considered to be different from $\mathbb{one} \{ \text{type = FLake} \}$. This makes little sense; all the levels of a categorical predictor should be grouped together such that all or none of the levels are kept in the model (this is a similar problem to interpreting `summary()` versus `anova()`). Therefore, we elected not to use lasso for variable selection, but we have shown the results below for reference.
+
+
+```r
+mc_validation = function(trials, ratio, lambdas, data) {
+  n = dim(data)[1]
+  errors = rep(0, length(lambdas))
+  
+  for (i in 1:trials) {
+    training_idx = sample(1:n, size = round(ratio * n), replace = FALSE)
+    training = data[training_idx, ]
+    validation = data[-training_idx, ]
+
+    training_matrix = model.matrix(mass ~ type + site + element_Rb + element_Sr + element_Y + element_Zr, data=training)
+    validation_matrix = model.matrix(mass ~ type + site + element_Rb + element_Sr + element_Y + element_Zr, data=validation)
+    
+    model = glmnet(x = training_matrix, y = training[, 2], lambda = lambdas)
+    betahat = rbind(model$a0,as.matrix(model$beta, nrow=8, ncol=length(lambdas)))[-2,]
+    predictions = validation_matrix %*% betahat
+    true_value = matrix(validation[, 2], nrow = length(validation[, 2]), ncol = length(lambdas), byrow=FALSE)
+    differences = predictions - true_value
+    errors = errors + sqrt(colSums(differences^2))
+  } 
+  
+  return(rev(errors / trials))
+}
+lambdas = seq(0, 5, 0.01)
+trials = 100
+training_test_ratio = 0.8
+
+plot(lambdas, mc_validation(trials, training_test_ratio, lambdas, train), 
+     type='l',
+     main = "Validation Error vs. Penalty",
+     xlab = "Penalty",
+     ylab = "Validation Error")
 ```
 
 ![](STAT343_final_files/figure-html/unnamed-chunk-29-1.png)<!-- -->
-
-```r
-plot_model(model2)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-29-2.png)<!-- -->
-
 
