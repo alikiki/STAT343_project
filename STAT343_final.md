@@ -7,12 +7,10 @@ output:
     keep_md: yes
   pdf_document: default
 fontsize: 10pt
-abstract: ""
+abstract: "In this study, we analyze a dataset on obsidian rocks, and build a linear model for predicting the mass of a rock made of obsidian. The peculiarities of this dataset include, but is not restricted to, high collinearity among continuous coefficients and a skewed response variable. To this end, we employ various variable selection methods and transformations. Furthermore, we execute standard diagnostics tests and bootstrapping to quantify the validity and robustness of our model."
 ---
 
 
-
-In this project, we will analyze a dataset on Obsidian rocks, and try to build a working linear model for predicting the mass of a rock made of obsidian. 
 
 ## Cleaning and Exploration
 
@@ -41,16 +39,19 @@ summary(data)
 ## 
 ```
 
-<!-- ```{r} -->
-<!-- head(data, n=10) -->
-<!-- ``` -->
+After importing the data, we spot some interesting features in the data.
 
-<!-- Data looks like it made it into R okay, so we can start analyzing it.  -->
+i) We see a repeated ID, which suggests that an object has been logged twice. 
+ii) Mass has at least one huge outlier, as well as a missing (NA) value. 
+iii) We see that there are too many types, and we will probably have to reduce the number of levels for our regression model to work.
+iv) Most of the sites are either Ali Kosh or Chagha Shefid, but there is one uncertain site, and one site which matches neither of these two. 
+v) Some of the Element data has significant outliers. 
 
-<!-- Step 1: Data Exploration, cleaning, dealing with missing data.  -->
+Let us deal with these sequentially.
 
+### ID
 
-After importing the data, we spot some interesting features: we see a repeated ID, which suggests that an object has been logged twice. The mass data has a missing value and an extremely large value also. A few missing and a few uncertain types. An ambigious site which we should probably predict. Element Rb and Element Sr look fine, but Element Y seems to have an outlier on the high side, and Element Zr has a low side outlier. Let's look at these one by one. 
+The repeated ID entry appears to be a double-logged entry, so we delete it. The alternative of not deleting it could produce overconfident standard error estimates (although this is just a single point, so the standard error estimate is unlikely to budge).
 
 
 
@@ -63,16 +64,21 @@ data[which(data$ID == "288275.002bh"), ]
 ## 32 288275.002bh 0.215 Blade Ali Kosh        252         49        32        339
 ## 33 288275.002bh 0.215 Blade Ali Kosh        254         48        31        339
 ```
-This just looks like a double-logged entry, so I will simply delete it. 
-
 
 ```r
 data <- data[-33,]
-#commenting out so I do not run it again, but I ran it once. 
 ```
-Now let us look at mass. I spot a few ourliers, so I will try to look at those. 
-The 160 value is an order of magntude above anything else, so I just get rid of it, since I cannot fill in the value in any way.
 
+### Mass
+
+The `mass` histogram exhibits an extremely large outlier - the 160 value is an order of magnitude above anything else, and the covariate values are not out of the ordinary. This indicates that this is a corrupted data point, so we delete it. (Note here that this is a slight selective inference problem, because we calculated the means of each of the covariates to observe that the covariate values of this corrupted point were not unusual.) 
+
+
+```r
+hist(data$mass)
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
 
 ```r
 data[which(data$mass >= 10), ]
@@ -84,51 +90,31 @@ data[which(data$mass >= 10), ]
 ```
 
 ```r
-#data[which(data$mass == NA), ] #no null values returned. 
-```
-
-
-```r
 data <- data[-464,]
-#commenting out so I do not run it again, but I ran it once. 
 ```
-I also get rid of the NA value for mass, since I cannot impute for the regression output anyway
 
+Upon removal of the outlier point, notice that the histogram has a severely skewed shape. Clearly, applying the log scale alleviates the skewedness.
 
-Now I plot the histogram of masses to see what kind of distribution it follows. 
 
 ```r
+par(mfrow=c(1,2))
 hist(data$mass)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
-Clearly, this does not seem normal It might be worth putting some sort of transformation onto it: probably transforming it on a log scale, or other variable. We will see about this later, but take a note of this. 
-
-
-```r
 hist(log(data$mass))
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
-This looks pretty good so let's do it
-
+![](STAT343_final_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
 ```r
 data$mass <- log(data$mass)
 ```
 
+### Type
 
-We should combine some of the type variables: blade and blades, etc. I feel pretty comfortable doing this, since all the errors seem to be for similar objects not and just logged differently by one person. 
-Even if it is not perfect, it seems necessary to do since we cannot deal with that large a number of different types and simplifying to 2-3 kinds of terms helps us save degrees of freedom for other considerations later.
-I first considered Retouched Blades being a different category to blades, but there are only 3 data points, which means even if they are differnet, they won't contribute much to a differnt effect, so I should just combine with Blade. Same with Used Flake to Flake.
+We should combine some of the type variables: blade and blades, etc; the classes do not seem very different, and they appear to be data entry anomalies. Furthermore, it seems necessary to collapse the levels since we may lose a lot of degrees of freedom from having a large number of levels in our data, which could be better used in our model selection and training. In sum, we have reduced to three levels: `Blade`, `Flake`, and `Core`. The full list of collapsed levels is available in the code snippet below. 
 
-```r
-levels(data$type)
-```
+We did first consider Retouched Blades and Use Flakes to be a different category to Blades/Flakes, with an additional variable indicating Retouched or not and Used or not, but we had too few data points to make any reasonable model for this effect. 
 
-```
-## NULL
-```
+Furthermore, if a data point is labeled ambiguously (e.g. `Core Fragment? Flake?`), we will never know the "correct" label. If we decide to coerce into one of the levels by looking at the data, then we are introducing selective inference problems.
 
 
 ```r
@@ -171,59 +157,31 @@ data = rbind(blade_data, flake_data, core_data)
 ```
 
 
-```r
-unique(data$type)
-```
+### Site
 
-```
-## [1] "Blade" "Flake" "Core"
-```
+Now for the two site outliers. We considered training a logistic regression model to fit the uncertain site and the uncertain types, but realized that this would mean having to throw out used data points for our core model building. Therefore, we drop these data points, since we cannot impute by a normal regression for categorical variables. 
 
-Also, we drop the NA entry in mass or type
-
-
-```r
-data <- data[complete.cases(data[, c('mass', 'type')]), ]
-```
-
-
-
-Now for the two site outliers. 
 
 ```r
 data <- data[-which(data$site == "Ali Kosh/Chaga Sefid" | data$site == "Hulailan Tepe Guran"), ]
 ```
 
-<!-- For the first one, we know that we just need to pick Ali Kosh/Chaga Sefid as its location, which we will do by imputing by mean. For the latter, we can either get rid of it and restrict our model to two sites, or try to learn which site looks more like Hulailan Tepe Guran. I will opt to do the latter.  -->
+### Elements
 
-Now I am just going to plot the histograms of the 4 elements and see what the distribution looks like. 
+We plot the histograms of the 4 elements and observe their distributions. 
 
 
 ```r
+par(mfrow=c(2,2))
 hist(data$element_Rb)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
-
-```r
 hist(data$element_Sr)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-15-2.png)<!-- -->
-
-```r
 hist(data$element_Y)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-15-3.png)<!-- -->
-
-```r
 hist(data$element_Zr)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-15-4.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
-Rb looks fine, but I think the others have outliers we can get rid of, which are probably just mis-entered data. 
+`element_Rb` looks reasonable, but the other elements have some outliers. For the same reason as outlined in the `mass` section, we delete the following outliers.
 
 
 ```r
@@ -238,50 +196,21 @@ data[which(data$element_Zr<100 | data$element_Y>50 | data$element_Sr<20), ]
 ## 628        303
 ## 652         65
 ```
-I will just delete these two 
-
 
 ```r
 data <- data[-which(data$element_Zr<100 | data$element_Y>50 | data$element_Sr<20), ]
 ```
 
+### NA values
 
-```r
-summary(data)
-```
-
-```
-##       ID                 mass             type               site          
-##  Length:637         Min.   :-3.4420   Length:637         Length:637        
-##  Class :character   1st Qu.:-1.5512   Class :character   Class :character  
-##  Mode  :character   Median :-0.8604   Mode  :character   Mode  :character  
-##                     Mean   :-0.9094                                        
-##                     3rd Qu.:-0.3682                                        
-##                     Max.   : 2.2379                                        
-##    element_Rb      element_Sr      element_Y       element_Zr   
-##  Min.   :206.0   Min.   :39.00   Min.   :22.00   Min.   :307.0  
-##  1st Qu.:231.0   1st Qu.:45.00   1st Qu.:28.00   1st Qu.:326.0  
-##  Median :240.0   Median :47.00   Median :29.00   Median :332.0  
-##  Mean   :241.3   Mean   :47.04   Mean   :29.41   Mean   :332.4  
-##  3rd Qu.:250.0   3rd Qu.:49.00   3rd Qu.:30.00   3rd Qu.:338.0  
-##  Max.   :291.0   Max.   :65.00   Max.   :34.00   Max.   :360.0
-```
-
-The data looks clean-ish now. 
-
-Note: note that we considered imputing by regression using a logistic regression model, but seemed too stenuous. 
+Finally, we drop the NA entries in `mass` or `type` for the same concerns as outlined previously. This concludes our data cleaning. 
 
 
 ```r
-cat_covs = 3:4
-cts_covs = 5:8
-
-for (i in cat_covs) {
-  data[, i] = as.factor(data[, i])
-}
-
-summary(data)
+data <- data[complete.cases(data[, c('mass', 'type')]), ]
 ```
+
+
 
 ```
 ##       ID                 mass            type               site    
@@ -300,9 +229,8 @@ summary(data)
 ##  Max.   :291.0   Max.   :65.00   Max.   :34.00   Max.   :360.0
 ```
 
-Looks good!
 
-Next, we check the correlations among the continuous covariates. This can be further confirmed by plotting all the the continuous covariates against each other. Observe that all the continuous covariates are highly correlated with each other. This can be further confirmed by calculating the condition number of the design matrix (restricted to the continuous covariates) - the design matrix is clearly poorly conditioned, with a very wide range of values. Furthermore, we can regress each covariate onto the other covariates to obtain $R^2$ values. Observe that the nearly all the R-squared values are fairly high; on the other hand, `element_Y` seems to have a lower R-squared value, indicating that it is "less" collinear. We will keep this observation in mind as we build our models. In general, one of our major concerns is battling multicollinearity. 
+We next check the correlations among the continuous covariates. This can be further confirmed by plotting all the the continuous covariates against each other. Observe that all the continuous covariates are highly correlated with each other. This can be further confirmed by calculating the condition number of the design matrix (restricted to the continuous covariates) - the design matrix is clearly poorly conditioned, with a very wide range of values. Furthermore, we can regress each covariate onto the other covariates to obtain $R^2$ values. Observe that the nearly all the R-squared values are high; `element_Y` is the only one with a comparatively low R-squared value, indicating that it is "less" collinear. We will keep this observation in mind as we build our models. In general, one of our major concerns is battling multicollinearity. 
 
 
 
@@ -319,10 +247,10 @@ cor(data[, cts_covs])
 ```
 
 ```r
-plot(data[, cts_covs], pch=20 , cex=1.0 , col="#69b3a2")
+plot(data[, cts_covs], pch=20 , cex=1.0 , col="#69b3a2", main="Correlations between elements")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
 ```r
 # condition number
@@ -335,109 +263,15 @@ sqrt(eigenvals$val[1]/eigenvals$val)
 ## [1]   1.00000  56.71536 252.83502 381.34080
 ```
 
+
 ```r
 # R-squared onto covariates
 r_squared = rep(0,length(cts_covs))
 for (i in 1:length(cts_covs)) {
   formula_string = paste(colnames(data)[cts_covs[i]], "~", paste(colnames(data)[cts_covs][-i], collapse="+"))
-  print(formula_string)
   model = lm(formula = formula_string, data=data)
-  print(summary(model))
   r_squared[i] = summary(model)$r.squared
 }
-```
-
-```
-## [1] "element_Rb ~ element_Sr+element_Y+element_Zr"
-## 
-## Call:
-## lm(formula = formula_string, data = data)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -46.919  -2.444   0.124   2.911  27.522 
-## 
-## Coefficients:
-##              Estimate Std. Error t value Pr(>|t|)    
-## (Intercept) -81.88037    9.58792  -8.540  < 2e-16 ***
-## element_Sr    1.79478    0.11821  15.183  < 2e-16 ***
-## element_Y     1.44067    0.19028   7.571 1.31e-13 ***
-## element_Zr    0.59072    0.03861  15.298  < 2e-16 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 5.404 on 633 degrees of freedom
-## Multiple R-squared:  0.8451,	Adjusted R-squared:  0.8444 
-## F-statistic:  1152 on 3 and 633 DF,  p-value: < 2.2e-16
-## 
-## [1] "element_Sr ~ element_Rb+element_Y+element_Zr"
-## 
-## Call:
-## lm(formula = formula_string, data = data)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -3.7874 -0.9714 -0.1060  0.6414 15.3679 
-## 
-## Coefficients:
-##               Estimate Std. Error t value Pr(>|t|)    
-## (Intercept) -20.503726   2.798652  -7.326 7.24e-13 ***
-## element_Rb    0.148748   0.009797  15.183  < 2e-16 ***
-## element_Y     0.377791   0.055199   6.844 1.82e-11 ***
-## element_Zr    0.061815   0.012776   4.838 1.65e-06 ***
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 1.556 on 633 degrees of freedom
-## Multiple R-squared:  0.7902,	Adjusted R-squared:  0.7892 
-## F-statistic: 794.7 on 3 and 633 DF,  p-value: < 2.2e-16
-## 
-## [1] "element_Y ~ element_Rb+element_Sr+element_Zr"
-## 
-## Call:
-## lm(formula = formula_string, data = data)
-## 
-## Residuals:
-##     Min      1Q  Median      3Q     Max 
-## -8.7779 -0.6898 -0.0506  0.7052  3.7614 
-## 
-## Coefficients:
-##              Estimate Std. Error t value Pr(>|t|)    
-## (Intercept) 11.951355   1.968793   6.070 2.20e-09 ***
-## element_Rb   0.057641   0.007613   7.571 1.31e-13 ***
-## element_Sr   0.182381   0.026648   6.844 1.82e-11 ***
-## element_Zr  -0.015112   0.009019  -1.675   0.0943 .  
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 1.081 on 633 degrees of freedom
-## Multiple R-squared:  0.5737,	Adjusted R-squared:  0.5716 
-## F-statistic: 283.9 on 3 and 633 DF,  p-value: < 2.2e-16
-## 
-## [1] "element_Zr ~ element_Rb+element_Sr+element_Y"
-## 
-## Call:
-## lm(formula = formula_string, data = data)
-## 
-## Residuals:
-##      Min       1Q   Median       3Q      Max 
-## -19.9801  -2.8629   0.1723   2.9479  22.1668 
-## 
-## Coefficients:
-##              Estimate Std. Error t value Pr(>|t|)    
-## (Intercept) 203.57802    3.71889  54.742  < 2e-16 ***
-## element_Rb    0.45694    0.02987  15.298  < 2e-16 ***
-## element_Sr    0.57695    0.11924   4.838 1.65e-06 ***
-## element_Y    -0.29217    0.17438  -1.675   0.0943 .  
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-## 
-## Residual standard error: 4.753 on 633 degrees of freedom
-## Multiple R-squared:  0.7236,	Adjusted R-squared:  0.7223 
-## F-statistic: 552.4 on 3 and 633 DF,  p-value: < 2.2e-16
-```
-
-```r
 r_squared
 ```
 
@@ -461,7 +295,7 @@ val = not_train[-validate_idx, ]
 test = not_train[validate_idx,]
 ```
 
-We first fit a simple model with no interaction terms. We cycle the order of the covariates in order to ask whether the categorical covariates are significant when compared against the full model. 
+We first fit a simple model with no interaction terms. We cycle the order of the covariates to ask whether the categorical covariates are significant when compared against the full model.
 
 
 ```r
@@ -542,10 +376,10 @@ summary(model0)
 
 
 ```r
-plot_diagnostics(model0, train)
+plot_diagnostics(model0, train, c(6,2))
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
 
 
 ```r
@@ -553,19 +387,19 @@ par(mfrow=c(2,2))
 plot(model0)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-25-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
 
 From the F-tests, we conclude that both the categorical covariates are significant in the full model i.e. there are significant differences between sites and also between object types. Furthermore, all the element covariates are significant, with `element_Rb` having the lowest p-value. 
 
-The diagnostic plots signify that the model is reasonably good - in particular, the linearity and normality assumptions are reasonable, save for a few outliers in the QQ plot. This suggests that interaction terms are unnecessary since no signal seems to remain. Nonetheless, we will later test for pairwise comparisons. We first some immediate problems. Firstly, the data appears to be heteroskedastic, as indicated by the sloped scale-location plot and the various diagnostic plots. The scale-location line has an upward trend, and our diagnostic plots indicate that the variance is higher at lower values of the continuous covariates (we expect less variability in the areas with few data points, and more variability in those with many data points). Additionally, the Flake type exhibits higher mass variance in comparison to the Blade type. For potentially high leverage points, there is a large value for `element_Sr` and a small value for `element_Y`. We will address each of these issues in the following order: 
+The diagnostic plots signify that the model is reasonably good - in particular, the linearity and normality assumptions are reasonable, save for a few outliers in the QQ plot. This suggests that interaction terms are unnecessary since no signal seems to remain. Nonetheless, we will later test for pairwise comparisons. We first some immediate problems. Firstly, the data seems heteroskedastic, as indicated by the sloped scale-location plot and the various diagnostic plots. The scale-location line has an upward trend, and our diagnostic plots indicate that the variance is higher at lower values of the continuous covariates. Additionally, the Flake type exhibits higher mass variance in comparison to the Blade type. For potentially high leverage points, there is a large value for `element_Sr` and a small value for `element_Y`. We will address each of these issues in the following order: 
 
 1. Outliers / high leverage points / influential points
 2. Variable selection / multicollinearity considerations
-3. Variance stabilization using transformation and interactions terms
+3. Heteroskedasticity concerns
 
 ## Outliers / High Leverage / Influential Points
 
-We first inspect the two points that we identified to be potentially high leverage. While the small point in `element_Y` does not have high leverage, the large point in `element_Sr` has high leverage. We save the index of this point to test for influentiality. 
+We first inspect the two points that we identified to be potentially high leverage. While the small point in `element_Y` does not have high leverage, the large point in `element_Sr` does. We save the index of this point to test for influentiality. 
 
 
 ```r
@@ -574,12 +408,19 @@ X = model.matrix(model0)
 lev = diag(X%*%solve(t(X)%*%X,t(X)))
 
 par(mfrow=c(3,1))
-plot(model0$fit, model0$residuals, cex=10*lev)
-plot(train[,"element_Sr"], model0$residuals, cex=10*lev)
-plot(train[,"element_Y"], model0$residuals, cex=10*lev)
+plot(model0$fit, model0$residuals, cex=10*lev,
+     xlab="Fitted values",
+     ylab="Residuals",
+     main="Residuals plot with leverage scores")
+plot(train[,"element_Sr"], model0$residuals, cex=10*lev,
+     xlab="element_Sr",
+     ylab="Residuals")
+plot(train[,"element_Y"], model0$residuals, cex=10*lev,
+     xlab="element_Y",
+     ylab="Residuals")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-26-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-19-1.png)<!-- -->
 
 ```r
 i1 = which.max(train[, "element_Sr"])
@@ -615,11 +456,15 @@ Therefore, we have a single candidate for an influential point. We fit our origi
 ```r
 model0_without_i1 = lm(formula = mass ~ element_Sr + element_Y + element_Rb + element_Zr + type + site, data=train[-i1,])
 
-plot(model0$fitted.values[-i1], model0_without_i1$fitted.values)
+plot(model0$fitted.values[-i1], model0_without_i1$fitted.values,
+     xlab="Fitted values w/ point",
+     ylab="Fitted values w/o point",
+     main="Model with point vs. Model without point")
 abline(0,1, col=2)
+legend("topleft", c("Identity line"), col=2, lty=1)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-28-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-21-1.png)<!-- -->
 
 ```r
 cor(model0$fitted.values[-i1], model0_without_i1$fitted.values)
@@ -631,11 +476,11 @@ cor(model0$fitted.values[-i1], model0_without_i1$fitted.values)
 
 ## Variable Selection and Multicollinearity
 
-In order to reduce multicollinearity, we want to carefully select covariates to reduce the size of our model. To this end, we consider forward stepwise selection, and evaluate using the Bayesian Information Criterion (BIC) and a separate validation set. We use the `step` method. 
+In order to reduce multicollinearity, we want to carefully select covariates to reduce the size of our model. To this end, we consider forward stepwise selection, and evaluate using the Bayesian Information Criterion (BIC). We use the `step` method. 
 
 
 ```r
-step(lm(mass ~ 1, data=train), direction='both', scope=formula(model0), trace=0, k=log(dim(train)[1]))
+step(lm(mass ~ 1, data=train), direction='forward', scope=formula(model0), trace=0, k=log(dim(train)[1]))
 ```
 
 ```
@@ -651,11 +496,7 @@ step(lm(mass ~ 1, data=train), direction='both', scope=formula(model0), trace=0,
 ##          0.97771           0.01925          -0.07621           0.08241
 ```
 
-```r
-# step(lm(mass ~ type + site + element_Rb + element_Y + element_Sr + element_Zr, data=train), direction='backward', scope=formula(model0), trace=0)
-```
-
-However, the forward stepwise method selected our original model! With this, we remove covariates by hand and observe the model diagnostics of the simpler model(s). To see which covariates we should remove, we record the differences in the R-squared values of the larger and smaller models. For the model with the overall smallest change, we plot the diagnostic plots. 
+However, the forward stepwise method selected our original model! Hence, we remove covariates by hand and observe the model diagnostics of the simpler model(s). To see which covariates we should remove, we record the differences in the R-squared values of the larger and smaller models. For the model with the overall smallest change, we plot the diagnostic plots. 
 
 
 ```r
@@ -674,7 +515,7 @@ Rsq_changes
 ## [1] 0.04514843 0.08552306 0.21870971 0.23022396
 ```
 
-The model with the smallest change in the R-squared considers the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared values (both non-adjusted and adjusted) and the residual sum of squares have decreased and increased respectively only slightly, which indicates that our model reduction was successful. 
+The model with the smallest change in the R-squared has the three covariates `type`, `site`, and `element_Rb`. The diagnostics suggest that mostly everything stays the same. The R-squared value (both non-adjusted and adjusted) has decreased only slightly, which indicates that our model reduction was successful. We quickly check again for high leverage points and outliers, and declare that none are influential. 
 
 
 ```r
@@ -707,13 +548,131 @@ summary(model1)
 ```
 
 ```r
-plot_diagnostics(model1, train)
+plot_diagnostics(model1, train, c(3,1))
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
+
+```r
 plot_model(model1)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-31-1.png)<!-- -->![](STAT343_final_files/figure-html/unnamed-chunk-31-2.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-24-2.png)<!-- -->
 
-We check again for high leverage points and outliers, as our diagnostic plots indicate a few points that deviate from the trend quite drastically (e.g. points 103, 403). However, we do not expect these points to be influential because they lie roughly equidistant from the trend line and do not possess high leverage. Using the same quantitative method to check for outliers, no outliers could be detected. We can further check if the removal of both of these points changes the fitted values significantly. The fitted values are nearly the same regardless of the point removals. Therefore, our model looks sufficiently good. Nonetheless, we still notice a slightly decreasing trend in variance in the `element_Rb` diagnostic plot - we address this in the next section.
+## Heteroskedasticity 
+
+We initially observed heteroskedasticity in our plot, and were concerned about this. An unsuccessful attempt to fix this using variance modeling and weighted least squares is in the appendix. However, we realized that the nonconstant variance we were seeing on the plot was actually a trick. There were far more data points in the middle region of our data around 0. This meant that even if variance was constant, it would appear to be wider, since there were more chances for tail end events to occur here. This means that the constant variance assumption is more or less satisfied, even though it does not inititally appear so. 
+
+
+## Model Selection
+
+We first compare our large model with our small model using Monte Carlo validation. Monte Carlo cross-validation is a generalization of leave-one-out validation: if the dataset has size $n$, we first sample without replacement to obtain a training set of size $n_1$, then funnel the remaining $n-n_1$ points into the test set.
+
+
+```r
+mc_validation = function(trials, ratio, formula, data) {
+  n = dim(data)[1]
+  error = rep(0, trials)
+  for (i in 1:trials) {
+    
+    training_idx = sample(1:n, size = round(ratio * n), replace = FALSE)
+    training = data[training_idx, ]
+    validation = data[-training_idx, ]
+    
+    model = lm(formula = formula, data=training)
+    predictions = predict(model, validation)
+    error[i] = sum((validation[, "mass"] - predictions)^2) / dim(validation)[i]
+  } 
+  
+  return(sum(error) / trials)
+}
+
+paste("Validation Error (big model):", mc_validation(500, 0.8, formula(model0), train))
+```
+
+```
+## [1] "Validation Error (big model): NA"
+```
+
+```r
+paste("Validation Error (small model):", mc_validation(500, 0.8, formula(model1), train))
+```
+
+```
+## [1] "Validation Error (small model): NA"
+```
+
+The larger model appears to perform better, but not by a massive margin. A small caveat here is that we are running validation on the training set, and we selected our models based on the training set. This indicates a selective inference problem, but for the purpose of model selection, the problem is alleviated by the use of Monte Carlo validation. 
+
+Next, we bootstrap to obtain empirical estimates for the standard errors of the coefficient estimates of both models. For the larger model, the theoretical standard errors are consistently lower than the empirical estimates; for the smaller model, the theoretical standard errors are much closer to the empirical estimates, as expected. 
+
+
+```r
+bootstrap = function(trials, data, formula, coef) {
+  n = dim(data)[1]
+  beta_boot = rep(0, trials)
+  SEbeta_boot = rep(0, trials)
+  for (i in 1:trials){
+    boot_sample = sample(n, n, replace=TRUE)
+    model_boot = lm(formula=formula, data=data[boot_sample,])
+    beta_boot[i] = model_boot$coefficients[coef]
+    SEbeta_boot[i] = summary(model_boot)$coefficients[coef,2]
+  }
+  
+  return(list("boot"=beta_boot, "SEboot"=SEbeta_boot))
+}
+
+hist_bootstrap = function(trials, data, model, fig_dim) {
+  model_coefs = rownames(coef(summary(model)))[-1]
+  
+  par(mfrow=fig_dim, mar=c(1,1,3,1))
+  for (i in 1:length(model_coefs)) {
+    boot = bootstrap(trials, data, formula(model), model_coefs[i])
+    hist(boot$boot, main = paste("Empirical SE(", model_coefs[i], "): ", round(sd(boot$boot), 3)))
+    hist(boot$SEboot, main=paste("Mean Theo SE(", model_coefs[i], "):", round(mean(boot$SEboot), 3)))
+  }
+}
+
+hist_bootstrap(100, train, model0, c(7,2))
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-26-1.png)<!-- -->
+
+```r
+hist_bootstrap(100, train, model1, c(4,2))
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-26-2.png)<!-- -->
+
+
+## Conclusion
+
+
+```r
+predictions = predict(model1, test)
+error = sum(predictions - test$mass)^2 / dim(test)[1]
+
+cis = predict(model1, test, interval = "predict", level = 0.95)
+upper = cis[, 2]
+lower = cis[, 3]
+plot(predictions, test$mass, ylab="True Value", xlab="Prediction", main="Model Prediction Accuracy")
+abline(0,1, col=8)
+polygon(x= predictions, y = upper, col = "blue",border = NA)
+polygon(x= predictions, y = lower, col = "blue", border = NA)
+legend("topright", c("95% prediction interval"), lty=1, col="blue")
+```
+
+![](STAT343_final_files/figure-html/unnamed-chunk-27-1.png)<!-- -->
+
+Our final model is `log(mass) ~ type + site + element_Rb`. Using the parameters from the training set, we obtain an out-of-sample error of 0.138. 
+
+\newpage
+
+## Appendix
+
+### Influential point detection for small model
+
+Our diagnostic plots for the smaller model indicate a few points that deviate from the trend quite drastically (e.g. points 103, 403). However, we do not expect these points to be influential because they lie roughly equidistant from the trend line and do not possess high leverage. Using the same quantitative method to check for outliers, no outliers could be detected. We can further check if the removal of both of these points changes the fitted values significantly. The fitted values are nearly the same regardless of the point removals. 
 
 
 ```r
@@ -727,7 +686,7 @@ plot(train[,"element_Sr"], model1$residuals, cex=10*lev)
 plot(train[,"element_Y"], model1$residuals, cex=10*lev)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-28-1.png)<!-- -->
 
 
 ```r
@@ -758,7 +717,7 @@ plot(train[, "element_Rb"], model1$residuals, col="white")
 text(train[, "element_Rb"], model1$residuals, as.character(1:dim(train)[1]))
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-33-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-29-1.png)<!-- -->
 
 
 ```r
@@ -799,7 +758,7 @@ plot(model1$fitted.values[-remove_idx], model_temp$fitted.values)
 abline(0,1, col=2)
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-35-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
 
 ```r
 cor(model1$fitted.values[-remove_idx], model_temp$fitted.values)
@@ -809,112 +768,11 @@ cor(model1$fitted.values[-remove_idx], model_temp$fitted.values)
 ## [1] 0.9997981
 ```
 
-## Heteroskedasticity 
-
-hi rohan
-
-
-## Model Selection
-
-We first compare our large model with our small model using Monte Carlo validation. Monte Carlo cross-validation is a generalization of leave-one-out validation: if the dataset has size $n$, we first sample without replacement to obtain a training set of size $n_1$, then funnel the remaining $n-n_1$ points into the test set.
-
-
-```r
-mc_validation = function(trials, ratio, formula, data) {
-  n = dim(data)[1]
-  error = rep(0, trials)
-  for (i in 1:trials) {
-    
-    training_idx = sample(1:n, size = round(ratio * n), replace = FALSE)
-    training = data[training_idx, ]
-    validation = data[-training_idx, ]
-    
-    model = lm(formula = formula, data=training)
-    predictions = predict(model, validation)
-    error[i] = sum((validation[, "mass"] - predictions)^2) / dim(validation)[1]
-  } 
-  
-  return(sum(error))
-}
-
-paste("Validation Error (big model):", mc_validation(500, 0.8, formula(model0), train))
-```
-
-```
-## [1] "Validation Error (big model): 194.884410595497"
-```
-
-```r
-paste("Validation Error (small model):", mc_validation(500, 0.8, formula(model1), train))
-```
-
-```
-## [1] "Validation Error (small model): 210.625280618918"
-```
-
-The larger model appears to perform better. The small caveat here is that 
-
-We bootstrap to obtain empirical estimates for the standard errors of the coefficient estimates of both models. 
-
-
-```r
-bootstrap = function(trials, data, formula, coef) {
-  n = dim(data)[1]
-  beta_boot = rep(0, trials)
-  SEbeta_boot = rep(0, trials)
-  for (i in 1:trials){
-    boot_sample = sample(n, n, replace=TRUE)
-    model_boot = lm(formula=formula, data=data[boot_sample,])
-    beta_boot[i] = model_boot$coefficients[coef]
-    SEbeta_boot[i] = summary(model_boot)$coefficients[coef,2]
-  }
-  
-  return(list("boot"=beta_boot, "SEboot"=SEbeta_boot))
-}
-
-hist_bootstrap = function(trials, data, model, fig_dim) {
-  model_coefs = rownames(coef(summary(model)))[-1]
-  
-  par(mfrow=fig_dim, mar=c(1,1,3,1))
-  for (i in 1:length(model_coefs)) {
-    boot = bootstrap(trials, data, formula(model), model_coefs[i])
-    hist(boot$boot, main = paste("Empirical SE(", model_coefs[i], "): ", round(sd(boot$boot), 3)))
-    hist(boot$SEboot, main=paste("Mean Theo SE(", model_coefs[i], "):", round(mean(boot$SEboot), 3)))
-  }
-}
-
-hist_bootstrap(100, train, model0, c(7,2))
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-37-1.png)<!-- -->
-
-```r
-hist_bootstrap(100, train, model1, c(4,2))
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-37-2.png)<!-- -->
-
-
-```r
-predictions = predict(model1, test)
-error = sum(predictions - test$mass)^2
-plot(predictions, test$mass, ylab="True Value", xlab="Prediction", main="Model 1 Prediction Accuracy")
-abline(0,1, col=8)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-38-1.png)<!-- -->
-
-Finally, using the parameters from the training set, we obtain an out-of-sample error of 13.273.
-
-\newpage
-
-## Appendix
-
 ### Lasso regression
 
 In order to reduce the effects of multicollinearity, we also tried lasso regression with various regularization parameters. We choose the best regularization parameter by doing Monte Carlo cross-validation. Unfortunately, lasso regression performs unsatisfactorily; there is no benefit to adding a penalty term because the validation error is monotonically increasing with increasing penalty. 
 
-The more significant problem is that `glmnet` treats different dummy variables as different covariates altogether; for example, $\mathbb{one} \{ \text{type = Blade} \}$ is considered to be different from $\mathbb{one} \{ \text{type = FLake} \}$. This makes little sense; all the levels of a categorical predictor should be grouped together such that all or none of the levels are kept in the model (this is a similar problem to interpreting `summary()` versus `anova()`). Therefore, we elected not to use lasso for variable selection, but we have shown the results below for reference.
+The more significant problem is that `glmnet` treats different dummy variables as different covariates altogether; for example, $\mathbb{1} \{ \text{type = Blade} \}$ is considered to be different from $\mathbb{1} \{ \text{type = Flake} \}$. This makes little sense; all the levels of a categorical predictor should be grouped together such that all or none of the levels are kept in the model (this is a similar problem to interpreting `summary()` versus `anova()`). Therefore, we elected not to use lasso for variable selection, but we have shown the results below for reference.
 
 
 ```r
@@ -952,46 +810,18 @@ plot(lambdas, mc_validation_lasso(trials, training_test_ratio, lambdas, train),
      ylab = "Validation Error")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-39-1.png)<!-- -->
+![](STAT343_final_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
 
 ## Heteroskedastic Trial & Error
 
-In order to accommodate for possibly differing variances, we consider modeling the variance using 
-
-On the contrary, weighted least squares appears to have overcorrected for the problem. Therefore, we do not consider the weighted least squares model. 
+In order to accommodate for possibly differing variances, we consider modeling the variance using the `element_Rb` data. However, weighted least squares does not bring any significant improvements.
 
 
 ```r
 model3 = gls(model=mass ~ type + site + element_Rb, data=train, weight = varConstPower(1, form = ~ element_Rb))
 fitted_sigma = (exp(model3$mod[[1]][[1]]) + (train[, "element_Rb"])^model3$mod[[1]][[2]])
-plot(train[,"element_Rb"], model3$resid /(fitted_sigma))
+plot(train[,"element_Rb"], model3$resid /(fitted_sigma), main="Residual plot of WLS")
 ```
 
-![](STAT343_final_files/figure-html/unnamed-chunk-40-1.png)<!-- -->
-
-```r
-plot(fitted(model3), model3$resid /(fitted_sigma))
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-40-2.png)<!-- -->
-
-```r
-plot(model1$fitted.values, model1$residuals)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-40-3.png)<!-- -->
-
-```r
-plot(fitted(model3), model1$fitted.values)
-abline(0,1, col=2)
-```
-
-![](STAT343_final_files/figure-html/unnamed-chunk-40-4.png)<!-- -->
-
-
-```r
-# plot_model(model3)
-```
-
-Finally, we consider interaction terms. However, we do not suspect that 
+![](STAT343_final_files/figure-html/unnamed-chunk-33-1.png)<!-- -->
 
